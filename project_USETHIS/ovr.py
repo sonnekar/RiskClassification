@@ -323,4 +323,4 @@ if __name__ == '__main__':
     scaler = MinMaxScaler()
     df['ovr_danger'] = scaler.fit_transform(df[['ovr_danger']])
 
-    df.to_pickle('df2.pkl')
+    df.to_pickle('df.pkl')

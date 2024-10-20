@@ -6,6 +6,10 @@ import matplotlib.pyplot as plt
 from typing import Dict, List, Tuple, Optional
 from tqdm import tqdm
 
+from final_draft.snorkelfuncs import lf_keyword_frequency,lf_energy_indicators,lf_negation,lf_risk_assessment,lf_injury_severity,lf_energy_context,lf_temporal_context,lf_adjective_presence,lf_personnel_role,lf_sentiment_analysis,lf_action_words,lf_proximity_to_energy,lf_reporting_style,lf_safety_protocols
+from snorkel.labeling import LabelingFunction, PandasLFApplier
+
+from scipy.stats import zscore
 
 SYSTEM_PROMPT = """
 You are a superintelligent Safety Classification and Learning (SCL) Model 
@@ -20,7 +24,7 @@ PNT_ATRISKFOLWUPNTS_TX: Point at-risk follow up notes text, recommended remediat
 For your purpose, 'danger or injury' means people (AEP personell OR other), property 
 (be it AEP, public, or personal), or the environment is at a risk of or actually did have inflicted harm / damage.
 
-Your output should be a score from 0-10 and NOTHING else, with 10 being the highest injury and danger levels.
+Your output should be a score from 1-10 and NOTHING else, with 10 being the highest injury and danger levels.
 """
 
 USER_PROMPT = """
@@ -29,7 +33,7 @@ Here is the report:
 {report}
 ```
 Remember:
-Your output should be a score from 0-10 and NOTHING else, with 10 being the highest injury and danger levels.
+Your output should be a score from 1-10 and NOTHING else, with 10 being the highest injury and danger levels.
 """
 
 MULTISHOT = {
@@ -72,10 +76,13 @@ MULTISHOT = {
 class GenerateDangerMagnitudes:
     def __init__(
             self,
+            df: pd.DataFrame,
             shot_examples: Optional[Dict[str, str]] = None,
             model: str = 'llama3:latest',
         ):  
-        """Generate one decision for an llm to make. """
+        """Generate danger magnitude score / metric with LLM (model) using shot examples from df.
+        
+        Adds it to df under 'danger_magnitude'. """
         predictions = []
 
         for _, row in tqdm(df.iterrows()):
@@ -121,6 +128,43 @@ class GenerateDangerMagnitudes:
             content = message['content']
             print(f"{role}: {content}\n")
 
+class GenerateWeakLabels:
+    def __init__(self, df: pd.DatetimeIndex):
+        """Generate weak labels for HSIF, LSIF, PSIF, None with Snorkel.
+        
+        Adds it to df under 'weak_label'. """
+        lfs = [
+            LabelingFunction(name="lf_keyword_frequency", f=lf_keyword_frequency),
+            LabelingFunction(name="lf_energy_indicators", f=lf_energy_indicators),
+            LabelingFunction(name="lf_negation", f=lf_negation),
+            LabelingFunction(name="lf_risk_assessment", f=lf_risk_assessment),
+            LabelingFunction(name="lf_injury_severity", f=lf_injury_severity),
+            LabelingFunction(name="lf_energy_context", f=lf_energy_context),
+            LabelingFunction(name="lf_temporal_context", f=lf_temporal_context),
+            LabelingFunction(name="lf_adjective_presence", f=lf_adjective_presence),
+            LabelingFunction(name="lf_personnel_role", f=lf_personnel_role),
+            LabelingFunction(name="lf_sentiment_analysis", f=lf_sentiment_analysis),
+            LabelingFunction(name="lf_action_words", f=lf_action_words),
+            LabelingFunction(name="lf_proximity_to_energy", f=lf_proximity_to_energy),
+            LabelingFunction(name="lf_reporting_style", f=lf_reporting_style),
+            LabelingFunction(name="lf_safety_protocols", f=lf_safety_protocols),
+        ]
+
+        df_local = df.copy()
+        df_local['report'] = df_local['PNT_NM'] + df_local['QUALIFIER_TXT'] + df_local['PNT_ATRISKNOTES_TX'] + df_local['PNT_ATRISKFOLWUPNTS_TX']
+        df_local = df_local[['report']]
+
+        applier = PandasLFApplier(lfs=lfs)
+        Y = applier.apply(df=df_local) 
+
+        def majority_vote(row):
+            valid_labels = row[row != -1] 
+            if len(valid_labels) == 0:  
+                return 0 
+            return np.bincount(valid_labels).argmax()  
+
+        df['weak_label'] = np.apply_along_axis(majority_vote, 1, Y)
+
 if __name__ == '__main__':
     df = pd.read_csv('../dataset/data.csv')
 
@@ -128,4 +172,9 @@ if __name__ == '__main__':
     df.fillna("NA", inplace=True)
     df['DATETIME_DTM'] = pd.to_datetime(df['DATETIME_DTM'])
 
-    GenerateDangerMagnitudes(shot_examples=MULTISHOT)
+    GenerateWeakLabels(df=df)
+    #GenerateDangerMagnitudes(df=df, shot_examples=MULTISHOT)
+
+    df['ovr_danger'] = zscore(df['weak_label'])# + (zscore(df['danger_magnitude']) * 2)
+
+    df.to_pickle('df.pkl')

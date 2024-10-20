@@ -9,6 +9,7 @@ from tqdm import tqdm
 from snorkelfuncs import lf_keyword_frequency,lf_energy_indicators,lf_negation,lf_risk_assessment,lf_injury_severity,lf_energy_context,lf_temporal_context,lf_adjective_presence,lf_personnel_role,lf_sentiment_analysis,lf_action_words,lf_proximity_to_energy,lf_reporting_style,lf_safety_protocols
 from snorkel.labeling import LabelingFunction, PandasLFApplier
 
+from sklearn.preprocessing import MinMaxScaler
 from scipy.stats import zscore
 
 SYSTEM_PROMPT = """
@@ -58,7 +59,7 @@ MULTISHOT = {
     feet of a live 12kV line running across the road. No contact was made because a worker intervened and
     communicated with the operator.
     PNT_ATRISKFOLWUPNTS_TX: NA
-    """: "3",
+    """: "4",
     """
     PNT_NM: Did you recognize additional slip, trip, or fall hazards that had not already been recognized and mitigated? If so, please select or describe these hazards in the At-Risk notes.
     QUALIFIER_TXT: Awareness of environment
@@ -70,7 +71,19 @@ MULTISHOT = {
     QUALIFIER_TXT: Side Shields adequate
     PNT_ATRISKNOTES_TX: Emplolyee was witnessed without side shields. Supervosor was informed so he couldd coach his employee.,
     PNT_ATRISKFOLWUPNTS_TX: NA
-    """: "2"
+    """: "3",
+    """
+    PNT_NM: PPE
+    QUALIFIER_TXT: Other - PPE, Safety glasses adequate
+    PNT_ATRISKNOTES_TX: Employee operating Digger [NAME] not wearing safety glasses. Two not wearing correct safety glasses. One wearing safety glasses without side shields. One employee marking and drilling pole without work gloves.
+    PNT_ATRISKFOLWUPNTS_TX: NA
+    """: "5",
+    """
+    PNT_NM: 15) If new hazards were identified, or if conditions changed since the original briefing, were they documented?
+    QUALIFIER_TXT: [Notes Required for At-Risk Conditions]
+    PNT_ATRISKNOTES_TX: The crew was using a cart / gator too move scaffolding material later in the day and one of the guy was not wearing a seat belt, I stopped him and explain to him that he needed to wear the seatbelt at all times.
+    PNT_ATRISKFOLWUPNTS_TX: NA
+    """: "7",
 }
 
 class GenerateDangerMagnitudes:
@@ -112,7 +125,7 @@ class GenerateDangerMagnitudes:
             messages.append({'role': 'user', 'content': USER_PROMPT.format(report=example)})
             messages.append({'role': 'assistant', 'content': str(shot_examples[example])})
 
-        messages.append({'role': 'user', 'content': USER_PROMPT.format(report=example)})
+        messages.append({'role': 'user', 'content': USER_PROMPT.format(report=prompt_field_notes)})
         #self._pretty_print_messages(messages)
         return messages
     
@@ -172,9 +185,15 @@ if __name__ == '__main__':
     df.fillna("NA", inplace=True)
     df['DATETIME_DTM'] = pd.to_datetime(df['DATETIME_DTM'])
 
+    df = df.sample(n=1000, random_state=42)
+
     GenerateWeakLabels(df=df)
     GenerateDangerMagnitudes(df=df, shot_examples=MULTISHOT)
 
     df['ovr_danger'] = zscore(df['weak_label']) + (zscore(df['danger_magnitude']) * 2)
 
-    df.to_pickle('df.pkl')
+    # Create a MinMaxScaler instance and apply it to the ovr_danger column
+    scaler = MinMaxScaler()
+    df['ovr_danger'] = scaler.fit_transform(df[['ovr_danger']])
+
+    df.to_pickle('df2.pkl')

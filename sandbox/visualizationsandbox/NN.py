@@ -82,10 +82,10 @@ model = DangerMagnitudeNN()
 
 # Step 4: Set up the training parameters
 criterion = nn.MSELoss()  # Use Mean Squared Error for regression
-optimizer = optim.Adam(model.parameters(), lr=0.0001)
+optimizer = optim.Adam(model.parameters(), lr=0.0005)
 
 # Step 5: Train the model
-num_epochs = 20
+num_epochs = 100
 for epoch in range(num_epochs):
     model.train()
     for batch_X, batch_y in train_loader:

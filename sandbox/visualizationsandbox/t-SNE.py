@@ -3,6 +3,8 @@ import numpy as np
 import torch
 from sklearn.manifold import TSNE
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
+
 from transformers import AutoTokenizer, AutoModel
 
 # Step 1: Load your DataFrame
@@ -33,6 +35,7 @@ embedded_2d = tsne.fit_transform(embeddings)
 
 # Step 5: Create a scatter plot
 plt.figure(figsize=(10, 8))
+#cmap = mcolors.LinearSegmentedColormap.from_list('red_green', ['green', 'yellow', 'red'])
 scatter = plt.scatter(embedded_2d[:, 0], embedded_2d[:, 1], c=ovr_danger, cmap='viridis', alpha=0.7)
 plt.colorbar(scatter, label='Danger Magnitude')
 plt.title('t-SNE Visualization of Reports by Danger Magnitude')

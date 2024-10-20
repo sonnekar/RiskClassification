@@ -13,10 +13,11 @@ if __name__ == "__main__":
     inputs = [
         ("llama2:latest", [{"role": "user", "content": "Tell me a joke."}]),
         ("llama2:latest", [{"role": "user", "content": "What is the capital of France?"}]),
-    ] * 100
+    ]
     
     results = pool.starmap(chat_worker, inputs)
-    print(results) 
+    for result in results:
+        print(result['message']['content']) 
     print(f'time w/ multiprocessing: {time.time() - t_s}')
 
     t_s = time.time()
